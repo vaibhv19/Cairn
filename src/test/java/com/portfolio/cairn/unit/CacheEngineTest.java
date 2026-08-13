@@ -2,6 +2,7 @@ package com.portfolio.cairn.unit;
 
 import com.portfolio.cairn.engine.CacheEngine;
 import com.portfolio.cairn.engine.CacheEntry;
+import com.portfolio.cairn.engine.evict.LruEvictionPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -13,7 +14,7 @@ public class CacheEngineTest {
 
     @BeforeEach
     public void setUp() {
-        cacheEngine = new CacheEngine();
+        cacheEngine = new CacheEngine(new LruEvictionPolicy(), 10000);
     }
 
     @Test
