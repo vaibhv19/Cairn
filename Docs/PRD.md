@@ -163,7 +163,7 @@ These architectural requirements guarantee the engineering rigors of the project
 * **Immediate Reclamation:** As soon as the cache size exceeds `max-size`, the configured eviction policy must execute synchronously with the write operation to immediately free memory space.
 
 ### 5.4 Operational & System Constraints
-* **Framework:** Java 17+ and Spring Boot 3.x.
+* **Framework:** Java 21 (LTS) and Spring Boot 3.3.x.
 * **No Database Dependencies:** The MVP must run out of the box with zero external database dependencies. Any simulated backing database for write-through/back tests must be mockable in-memory.
 
 ---
