@@ -1,0 +1,19 @@
+server:
+  port: 8080
+
+cairn:
+  cache:
+    max-size: 10000
+    eviction-policy: lru
+  cluster:
+    local-node-id: Node-A
+    nodes:
+      - nodeId: Node-A
+        address: http://127.0.0.1:8081
+        virtualNodes: 150
+      - nodeId: Node-B
+        address: http://127.0.0.1:8082
+        virtualNodes: 150
+      - nodeId: Node-C
+        address: http://127.0.0.1:8083
+        virtualNodes: 150
