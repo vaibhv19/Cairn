@@ -4,19 +4,19 @@
 * **Document Version:** 0.1.0
 * **Status:** Draft
 * **Authors:** Portfolio Owner / Technical Architect
-* **Target Release:** v0.5.0 (Roadmap Complete)
+* **Milestone Reference:** v0.5.0 (Roadmap Complete)
 * **Twin Project Reference:** [Shard Roadmap]()
 
 ---
 
 ## 1. Git Workflow & Branching Strategy
 
-To maintain a clean and reliable release progression, all code additions must adhere to the following git workflow:
+To maintain a clean and reliable milestone progression, all code additions must adhere to the following git workflow:
 
 ```
 [main]          <------------------------------ (Milestone Merges Only)
   ^
-  | (release tags: v0.1.0, v0.5.0, v1.0.0)
+  | (milestone references: v0.1.0, v0.5.0, v1.0.0)
 [test]          <------------------ (RC testing & manual verification)
   ^
   | (successful integration & stress tests)
@@ -29,7 +29,7 @@ To maintain a clean and reliable release progression, all code additions must ad
 ### Git Transition Gates:
 1. **`feature/*` to `develop`:** Triggered when a developer finishes a function-level task. Require code compilation and $100\%$ success of Phase-specific **Standard Unit Tests**.
 2. **`develop` to `test`:** Triggered at phase completion. Requires $100\%$ success of **Concurrency Stress Tests** (under high contention) to guarantee there are no race conditions or lock memory leaks.
-3. **`test` to `main`:** Triggered at Milestone Release. Requires final code audit, static analysis checks, and up-to-date documentation.
+3. **`test` to `main`:** Triggered at Milestone Completion. Requires final code audit, static analysis checks, and up-to-date documentation.
 
 ---
 

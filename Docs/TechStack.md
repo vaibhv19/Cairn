@@ -4,7 +4,7 @@
 * **Document Version:** 0.1.0
 * **Status:** Draft
 * **Authors:** Portfolio Owner / Technical Architect
-* **Target Release:** v0.1.0 (Docs & MVP)
+* **Milestone Reference:** v0.1.0 (Docs Complete)
 * **Twin Project Reference:** [Shard Tech Stack]()
 
 ---

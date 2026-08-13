@@ -4,7 +4,7 @@
 * **Document Version:** 0.1.0
 * **Status:** Draft
 * **Authors:** Portfolio Owner / Technical Architect
-* **Target Release:** v0.1.0 (Docs & MVP)
+* **Milestone Reference:** v0.1.0 (Docs Complete)
 * **Twin Project Reference:** [Shard Folder Structure]()
 
 ---
@@ -109,7 +109,7 @@ Because Cairn’s core goal is to verify thread safety and lock performance unde
 
 ## 4. `/docs` Folder Inventory
 
-The `/Docs` folder contains the complete, MAANG-level v0.1.0 documentation set required for the Cairn project release:
+The `/Docs` folder contains the complete, MAANG-level v0.1.0 documentation set required for the Cairn project milestone:
 * **`PRD.md`**: Core product goals, requirements, success metrics, and twin comparison scope.
 * **`TechStack.md`**: Architectural justifications for Java 21, Spring Boot, `ConcurrentHashMap`, and locking choices.
 * **`SystemArchitecture.md`**: Internal component layouts, thread models, locking barriers, and sharding topology.
