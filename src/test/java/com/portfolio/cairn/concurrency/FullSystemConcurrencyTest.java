@@ -1,8 +1,11 @@
 package com.portfolio.cairn.concurrency;
 
 import com.portfolio.cairn.engine.CacheEngine;
+import com.portfolio.cairn.engine.InvalidationService;
 import com.portfolio.cairn.engine.evict.LruEvictionPolicy;
 import com.portfolio.cairn.expire.ActiveExpirySweeper;
+import com.portfolio.cairn.metrics.CacheMetricsCollector;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -87,5 +90,74 @@ public class FullSystemConcurrencyTest {
         
         // Validate eviction list integrity traverses correctly with no cycles or broken pointers
         assertThat(lruPolicy.checkIntegrity()).isTrue();
+    }
+
+    @Test
+    public void testPhase3Concurrency() throws InterruptedException {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        CacheMetricsCollector collector = new CacheMetricsCollector(registry);
+        CacheEngine cache = new CacheEngine(
+                new LruEvictionPolicy(),
+                1000,
+                new com.portfolio.cairn.engine.MockDatabase(),
+                collector
+        );
+        InvalidationService invalidationService = new InvalidationService(cache);
+
+        int threadCount = 60;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        AtomicInteger exceptionCount = new AtomicInteger(0);
+
+        // Prepopulate some keys
+        for (int i = 0; i < 200; i++) {
+            cache.set("key-" + i, "val-" + i);
+        }
+
+        for (int i = 0; i < threadCount; i++) {
+            final int role = i % 4;
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    long start = System.currentTimeMillis();
+                    while (System.currentTimeMillis() - start < 2000) {
+                        try {
+                            int k = (int) (Math.random() * 500);
+                            if (role == 0) {
+                                // Write-Back
+                                cache.writeBack("key-" + k, "wb-val-" + k);
+                            } else if (role == 1) {
+                                // Write-Through
+                                cache.writeThrough("key-" + k, "wt-val-" + k);
+                            } else if (role == 2) {
+                                // GET
+                                cache.get("key-" + k);
+                            } else {
+                                // Invalidation (wildcard)
+                                invalidationService.invalidateByPattern("key-" + (int)(Math.random() * 100) + "*");
+                            }
+                        } catch (Exception e) {
+                            exceptionCount.incrementAndGet();
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        boolean completed = endLatch.await(5, TimeUnit.SECONDS);
+        executor.shutdown();
+
+        assertThat(completed).isTrue();
+        assertThat(exceptionCount.get()).isEqualTo(0);
+
+        // Confirm metrics collector recorded operations under high volume concurrent load
+        assertThat(collector.getHits() + collector.getMisses()).isGreaterThan(0);
+        assertThat(collector.getTimer().count()).isGreaterThan(0);
     }
 }
