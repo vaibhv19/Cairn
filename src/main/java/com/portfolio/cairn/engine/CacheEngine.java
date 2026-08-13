@@ -1,6 +1,8 @@
 package com.portfolio.cairn.engine;
 
 import com.portfolio.cairn.engine.evict.EvictionPolicy;
+import com.portfolio.cairn.exception.EvictionFailedException;
+import com.portfolio.cairn.exception.InvalidTtlException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -83,15 +85,19 @@ public class CacheEngine {
      * If the cache size exceeds maxCapacity, the active policy's evictVictim() is triggered.
      */
     public void set(String key, String value, Long ttlSeconds) {
+        if (ttlSeconds != null && ttlSeconds <= 0) {
+            throw new InvalidTtlException("TTL must be a positive integer.");
+        }
         synchronized (writeLock) {
             long expiryTime = (ttlSeconds == null) ? Long.MAX_VALUE : (System.currentTimeMillis() + ttlSeconds * 1000);
             boolean isUpdate = store.containsKey(key);
 
             if (!isUpdate && store.size() >= maxCapacity) {
                 String victim = evictionPolicy.evictVictim();
-                if (victim != null) {
-                    store.remove(victim);
+                if (victim == null) {
+                    throw new EvictionFailedException("Cache capacity reached and eviction was unable to free memory.");
                 }
+                store.remove(victim);
             }
 
             CacheEntry entry = new CacheEntry(value, System.currentTimeMillis(), expiryTime, System.currentTimeMillis(), 1);
