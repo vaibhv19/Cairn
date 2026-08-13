@@ -168,6 +168,13 @@ public class CacheEngine {
     }
 
     /**
+     * Returns the maximum capacity of the cache.
+     */
+    public int getMaxCapacity() {
+        return maxCapacity;
+    }
+
+    /**
      * Returns the total count of key-level TTL expirations.
      */
     public long getTtlEvictions() {
