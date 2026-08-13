@@ -17,3 +17,14 @@ cairn:
       - nodeId: Node-C
         address: http://127.0.0.1:8083
         virtualNodes: 150
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+spring:
+  main:
+    allow-bean-definition-overriding: true
+
