@@ -26,6 +26,12 @@ The core single-node cache operations are exposed via standard REST paths. All r
   }
   ```
   *(Note: `ttl` is optional. Value is in seconds.)*
+
+* **Validation Constraints:**
+  - **key**: String. Must not be blank. Max length 250 characters.
+  - **value**: String. Must not be null. Max size 1MB (1,048,576 characters).
+  - **ttl**: Long. Optional. Must be a positive integer (minimum 1 second).
+
 * **Response (New Insert):**
   * **Status Code:** `201 Created`
   * **Response Body:**
@@ -48,14 +54,14 @@ The core single-node cache operations are exposed via standard REST paths. All r
       "expiry": "2026-08-13T10:13:29Z"
     }
     ```
-* **Response (Validation Error - Invalid TTL):**
+* **Response (Validation Error - Constraints Failed / Invalid Inputs):**
   * **Status Code:** `400 Bad Request`
   * **Response Body:**
     ```json
     {
       "status": "error",
-      "errorCode": "INVALID_TTL",
-      "message": "TTL must be a positive integer.",
+      "errorCode": "VALIDATION_FAILED",
+      "message": "key: Key must not exceed 250 characters, value: Value must not exceed 1MB",
       "timestamp": "2026-08-13T09:13:29.112Z"
     }
     ```

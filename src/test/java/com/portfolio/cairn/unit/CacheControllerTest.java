@@ -53,15 +53,13 @@ public class CacheControllerTest {
     public void testSetInvalidTtl() throws Exception {
         CacheDtos.SetRequest request = new CacheDtos.SetRequest("k1", "v1", -10L);
 
-        Mockito.when(nodeRouter.set(any())).thenThrow(new InvalidTtlException("TTL must be a positive integer."));
-
         mockMvc.perform(post("/api/v1/cache")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status", is("error")))
-                .andExpect(jsonPath("$.errorCode", is("INVALID_TTL")))
-                .andExpect(jsonPath("$.message", is("TTL must be a positive integer.")))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("ttl: TTL must be positive")))
                 .andExpect(jsonPath("$.timestamp", notNullValue()));
     }
 
@@ -168,5 +166,98 @@ public class CacheControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.key", is("k1")))
                 .andExpect(jsonPath("$.ttl_remaining", is(600)));
+    }
+
+    @Test
+    public void testSetBlankKey() throws Exception {
+        CacheDtos.SetRequest request = new CacheDtos.SetRequest("   ", "v1", 300L);
+
+        mockMvc.perform(post("/api/v1/cache")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is("error")))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("key: Key must not be blank")));
+    }
+
+    @Test
+    public void testSetOversizedKey() throws Exception {
+        String longKey = "A".repeat(251);
+        CacheDtos.SetRequest request = new CacheDtos.SetRequest(longKey, "v1", 300L);
+
+        mockMvc.perform(post("/api/v1/cache")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is("error")))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("key: Key must not exceed 250 characters")));
+    }
+
+    @Test
+    public void testSetOversizedValue() throws Exception {
+        String longVal = "A".repeat(1048577);
+        CacheDtos.SetRequest request = new CacheDtos.SetRequest("k1", longVal, 300L);
+
+        mockMvc.perform(post("/api/v1/cache")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is("error")))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("value: Value must not exceed 1MB")));
+    }
+
+    @Test
+    public void testSetNullValue() throws Exception {
+        CacheDtos.SetRequest request = new CacheDtos.SetRequest("k1", null, 300L);
+
+        mockMvc.perform(post("/api/v1/cache")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is("error")))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("value: Value must not be null")));
+    }
+
+    @Test
+    public void testSetValidationInvalidTtl() throws Exception {
+        CacheDtos.SetRequest request = new CacheDtos.SetRequest("k1", "v1", 0L);
+
+        mockMvc.perform(post("/api/v1/cache")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is("error")))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("ttl: TTL must be positive")));
+    }
+
+    @Test
+    public void testExpireValidationInvalidTtl() throws Exception {
+        CacheDtos.ExpireRequest request = new CacheDtos.ExpireRequest(0L);
+
+        mockMvc.perform(post("/api/v1/cache/k1/expire")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is("error")))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("ttl: TTL must be positive")));
+    }
+
+    @Test
+    public void testInvalidateValidationBlankPattern() throws Exception {
+        CacheDtos.InvalidateRequest request = new CacheDtos.InvalidateRequest("");
+
+        mockMvc.perform(post("/api/v1/cache/invalidate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is("error")))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("pattern: Pattern must not be blank")));
     }
 }

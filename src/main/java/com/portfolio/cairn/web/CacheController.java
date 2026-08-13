@@ -4,6 +4,7 @@ import com.portfolio.cairn.sharding.NodeRouter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/cache")
@@ -17,7 +18,7 @@ public class CacheController {
     }
 
     @PostMapping
-    public ResponseEntity<?> set(@RequestBody CacheDtos.SetRequest request) {
+    public ResponseEntity<?> set(@Valid @RequestBody CacheDtos.SetRequest request) {
         return nodeRouter.set(request);
     }
 
@@ -39,7 +40,7 @@ public class CacheController {
     @PostMapping("/{key}/expire")
     public ResponseEntity<?> expire(
             @PathVariable String key,
-            @RequestBody CacheDtos.ExpireRequest request
+            @Valid @RequestBody CacheDtos.ExpireRequest request
     ) {
         return nodeRouter.expire(key, request);
     }
@@ -51,7 +52,7 @@ public class CacheController {
 
     @PostMapping("/invalidate")
     public ResponseEntity<?> invalidate(
-            @RequestBody CacheDtos.InvalidateRequest request,
+            @Valid @RequestBody CacheDtos.InvalidateRequest request,
             @RequestParam(value = "localOnly", required = false, defaultValue = "false") boolean localOnly
     ) {
         return nodeRouter.invalidate(request, localOnly);

@@ -158,9 +158,13 @@ These architectural requirements guarantee the engineering rigors of the project
 * **Sub-Millisecond Engine Latency:** Excluding HTTP network overhead, the cache engine must process read and write actions in sub-millisecond ranges ($< 1$ ms at $p99$ under zero contention).
 * **Throughput Scaling:** The service must scale throughput linearly with the number of CPU cores when multiple concurrent clients execute requests.
 
-### 5.3 Memory Constraints
+### 5.3 Memory & Payload Constraints
 * **Memory Limits:** The cache size must be bounded by a maximum key capacity configured at startup (e.g., `cairn.cache.max-size=10000`).
 * **Immediate Reclamation:** As soon as the cache size exceeds `max-size`, the configured eviction policy must execute synchronously with the write operation to immediately free memory space.
+* **Payload Constraints:**
+  * **Key Size Limit:** Keys must not be blank and are capped at a maximum of 250 characters.
+  * **Value Size Limit:** Values are capped at a maximum of 1MB (1,048,576 characters).
+  * **TTL Bound:** TTL values must be positive integers (minimum 1 second).
 
 ### 5.4 Operational & System Constraints
 * **Framework:** Java 21 (LTS) and Spring Boot 3.3.x.

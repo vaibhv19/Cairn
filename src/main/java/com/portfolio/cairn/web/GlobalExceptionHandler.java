@@ -5,8 +5,10 @@ import com.portfolio.cairn.exception.InvalidTtlException;
 import com.portfolio.cairn.exception.KeyNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -30,5 +32,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.INSUFFICIENT_STORAGE)
                 .body(CacheDtos.ErrorResponse.of("EVICTION_FAILED", ex.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<CacheDtos.ErrorResponse> handleValidationException(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(err -> err.getField() + ": " + err.getDefaultMessage())
+                .collect(Collectors.joining(", "));
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(CacheDtos.ErrorResponse.of("VALIDATION_FAILED", message));
     }
 }

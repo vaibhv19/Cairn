@@ -1,13 +1,24 @@
 package com.portfolio.cairn.web;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 
 public class CacheDtos {
 
     public record SetRequest(
+            @NotBlank(message = "Key must not be blank")
+            @Size(max = 250, message = "Key must not exceed 250 characters")
             String key,
+
+            @NotNull(message = "Value must not be null")
+            @Size(max = 1048576, message = "Value must not exceed 1MB")
             String value,
+
+            @Min(value = 1, message = "TTL must be positive")
             Long ttl
     ) {}
 
@@ -29,6 +40,8 @@ public class CacheDtos {
     ) {}
 
     public record ExpireRequest(
+            @NotNull(message = "TTL must not be null")
+            @Min(value = 1, message = "TTL must be positive")
             Long ttl
     ) {}
 
@@ -43,6 +56,7 @@ public class CacheDtos {
     ) {}
 
     public record InvalidateRequest(
+            @NotBlank(message = "Pattern must not be blank")
             String pattern
     ) {}
 
