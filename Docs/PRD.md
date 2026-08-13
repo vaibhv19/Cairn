@@ -23,11 +23,11 @@ While Shard and Cairn share the exact same features, APIs, and architectural bou
 
 ```mermaid
 graph TD
-    subgraph Client Application / Benchmark Suite
+    subgraph ClientApp ["Client Application / Benchmark Suite"]
         Client[Concurrent Clients / Load Generator]
     end
 
-    subgraph Shard (Python Twin)
+    subgraph ShardTwin ["Shard (Python Twin)"]
         GIL[Global Interpreter Lock - GIL]
         PyThreads[Interleaved OS Threads]
         PyCache[Single-Threaded Engine Execution]
@@ -36,7 +36,7 @@ graph TD
         PyThreads --> PyCache
     end
 
-    subgraph Cairn (Java Twin - This Project)
+    subgraph CairnTwin ["Cairn (Java Twin - This Project)"]
         JVM[JVM Thread Scheduler]
         JavaThreads[True Parallel OS Threads]
         LockStriping[Lock-Striped / Lock-Free Map]

@@ -14,26 +14,26 @@ Below is the component layout of a single Cairn node and its interaction within 
 graph TD
     Client[Client / Benchmark Runner]
     
-    subgraph Cluster Layer (Phase 2)
+    subgraph ClusterLayer ["Cluster Layer (Phase 2)"]
         Routing[Routing / Proxy Layer]
         ConsistentHash[Consistent Hashing Ring]
     end
 
-    subgraph "Cairn Node (JVM Instance)"
+    subgraph CairnNode ["Cairn Node (JVM Instance)"]
         REST[Spring REST Controller]
         CacheEngine[Cache Engine Core]
         Storage[(ConcurrentHashMap Segmented Store)]
         
-        subgraph Eviction Engine
+        subgraph EvictionEngine ["Eviction Engine"]
             EvictionStrategy["Eviction Strategy (LRU/LFU Bean)"]
             RWLock[ReentrantReadWriteLock]
         end
         
-        subgraph Expiration Engine
+        subgraph ExpirationEngine ["Expiration Engine"]
             ActiveExpiry["Active Expiry Sweeper (Scheduled Threads)"]
         end
 
-        subgraph Metrics Engine
+        subgraph MetricsEngine ["Metrics Engine"]
             MetricsCollector[Micrometer Counter / LongAdder]
         end
     end
@@ -56,7 +56,7 @@ In a sharded cluster (Phase 2), cache operations are routed to target nodes usin
 ```mermaid
 graph TD
     %% Ring representation (clockwise routing)
-    subgraph Hashing Ring [Consistent Hashing Ring (0 to 2^32 - 1)]
+    subgraph HashingRing ["Consistent Hashing Ring (0 to 2^32 - 1)"]
         vA1["Node A (Virtual v1)<br/>Hash: 0x20000000"]
         vB1["Node B (Virtual v1)<br/>Hash: 0x50000000"]
         vA2["Node A (Virtual v2)<br/>Hash: 0x80000000"]
@@ -75,7 +75,7 @@ graph TD
     KeyHash -.->|1. Hash & Lookup tailMap| vA2
     vA2 -->|2. Route to physical node| PhysicalA[Physical Node A]
     
-    style Hashing Ring fill:#111b27,stroke:#38bdf8,stroke-width:2px,color:#fff
+    style HashingRing fill:#111b27,stroke:#38bdf8,stroke-width:2px,color:#fff
     style vA1 fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#fff
     style vA2 fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#fff
     style vB1 fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#fff

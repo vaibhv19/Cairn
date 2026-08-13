@@ -1,26 +1,26 @@
 graph TD
     Client[Client / Benchmark Runner]
     
-    subgraph Cluster Layer (Phase 2)
+    subgraph ClusterLayer ["Cluster Layer (Phase 2)"]
         Routing[Routing / Proxy Layer]
         ConsistentHash[Consistent Hashing Ring]
     end
 
-    subgraph "Cairn Node (JVM Instance)"
+    subgraph CairnNode ["Cairn Node (JVM Instance)"]
         REST[Spring REST Controller]
         CacheEngine[Cache Engine Core]
         Storage[(ConcurrentHashMap Segmented Store)]
         
-        subgraph Eviction Engine
+        subgraph EvictionEngine ["Eviction Engine"]
             EvictionStrategy["Eviction Strategy (LRU/LFU Bean)"]
             RWLock[ReentrantReadWriteLock]
         end
         
-        subgraph Expiration Engine
+        subgraph ExpirationEngine ["Expiration Engine"]
             ActiveExpiry["Active Expiry Sweeper (Scheduled Threads)"]
         end
 
-        subgraph Metrics Engine
+        subgraph MetricsEngine ["Metrics Engine"]
             MetricsCollector[Micrometer Counter / LongAdder]
         end
     end
