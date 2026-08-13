@@ -22,14 +22,7 @@ public class ConcurrentExpiryTest {
         ActiveExpirySweeper sweeper = new ActiveExpirySweeper(cache, 1000);
 
         int keyCount = 100;
-        // Insert keys with 300ms TTL
-        for (int i = 0; i < keyCount; i++) {
-            cache.set("key-" + i, "val-" + i, 300L / 1000L > 0 ? 300L / 1000L : 1L); // Force 1s TTL to prevent instant expiration before threads start, or set specific time.
-            // Wait, we can specify a small TTL. In CacheEngine.set(key, val, ttlSeconds), it multiplies by 1000.
-            // If we set to 1 second, it will expire in 1000ms. That is perfect.
-        }
-        
-        // Let's re-write using 1s TTL
+        // Populate keys with 1s TTL
         for (int i = 0; i < keyCount; i++) {
             cache.set("key-" + i, "val-" + i, 1L);
         }

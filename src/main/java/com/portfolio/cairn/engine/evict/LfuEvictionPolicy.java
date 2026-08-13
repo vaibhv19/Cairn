@@ -1,6 +1,5 @@
 package com.portfolio.cairn.engine.evict;
 
-import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
