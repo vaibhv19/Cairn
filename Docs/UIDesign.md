@@ -159,6 +159,7 @@ The Phase 3 dashboard is a diagnostic tool used to compare performance. For exam
  [09:12:05] [Node B] Background Expiry Sweep complete. 12 stale keys reclaimed.
 ========================================================================================
 ```
+*Memory figures are informational only — Cairn enforces capacity via key-count limits (`cairn.cache.max-size`) per PRD §8 Q1; memory-based capacity enforcement is an unimplemented future consideration, not an active constraint.*
 
 ### 3.2 Key Visualizations & Charts
 1. **Cluster Health Cards:** Shows individual CPU, Memory, and Active Key Count to easily spot ring distribution issues (hot spots) or node outages.
