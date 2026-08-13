@@ -17,7 +17,7 @@ Cairn follows the standard Maven directory structure, separating application log
 cairn/
 ├── .git/
 ├── Docs/                              # v0.1.0 Complete Documentation Suite
-│   ├── Cairn — Feature List.txt
+│   ├── Cairn — Feature List.md
 │   ├── PRD.md
 │   ├── TechStack.md
 │   ├── SystemArchitecture.md
