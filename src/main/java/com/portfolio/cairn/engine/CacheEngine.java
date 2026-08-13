@@ -6,8 +6,13 @@ import com.portfolio.cairn.exception.InvalidTtlException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import com.portfolio.cairn.metrics.CacheMetricsCollector;
+import jakarta.annotation.PreDestroy;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.LongAdder;
 
 @Service
@@ -17,14 +22,61 @@ public class CacheEngine {
     private final int maxCapacity;
     private final Object writeLock = new Object();
     private final LongAdder ttlEvictions = new LongAdder();
+    
+    private final MockDatabase mockDatabase;
+    private final LinkedBlockingQueue<WriteEvent> writeBackQueue = new LinkedBlockingQueue<>();
+    private ExecutorService writeBackExecutor;
+    private final CacheMetricsCollector metricsCollector;
 
     @Autowired
     public CacheEngine(
             EvictionPolicy evictionPolicy,
-            @Value("${cairn.cache.max-size:10000}") int maxCapacity
+            @Value("${cairn.cache.max-size:10000}") int maxCapacity,
+            MockDatabase mockDatabase,
+            CacheMetricsCollector metricsCollector
     ) {
         this.evictionPolicy = evictionPolicy;
         this.maxCapacity = maxCapacity;
+        this.mockDatabase = mockDatabase;
+        this.metricsCollector = metricsCollector;
+        startWriteBackWorker();
+    }
+
+    public CacheEngine(EvictionPolicy evictionPolicy, int maxCapacity, MockDatabase mockDatabase) {
+        this(evictionPolicy, maxCapacity, mockDatabase, new CacheMetricsCollector(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
+    }
+
+    public CacheEngine(EvictionPolicy evictionPolicy, int maxCapacity) {
+        this(evictionPolicy, maxCapacity, new MockDatabase());
+    }
+
+    private void startWriteBackWorker() {
+        writeBackExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "cairn-write-back-worker");
+            t.setDaemon(true);
+            return t;
+        });
+        writeBackExecutor.submit(() -> {
+            try {
+                while (!Thread.currentThread().isInterrupted()) {
+                    WriteEvent event = writeBackQueue.take();
+                    try {
+                        mockDatabase.save(event.key(), event.value());
+                    } catch (Exception e) {
+                        // Suppress background exception to maintain stability
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
+    @PreDestroy
+    public void stopWriteBackWorker() {
+        if (writeBackExecutor != null) {
+            writeBackExecutor.shutdownNow();
+        }
     }
 
     /**
@@ -55,22 +107,32 @@ public class CacheEngine {
      * including passive expiration checks.
      */
     public CacheEntry get(String key) {
-        CacheEntry entry = store.get(key);
-        if (entry != null) {
-            if (System.currentTimeMillis() > entry.expiryTime()) {
-                synchronized (writeLock) {
-                    CacheEntry currentEntry = store.get(key);
-                    if (currentEntry != null && System.currentTimeMillis() > currentEntry.expiryTime()) {
-                        store.remove(key);
-                        evictionPolicy.onRemove(key);
-                        ttlEvictions.increment();
+        long start = System.nanoTime();
+        try {
+            CacheEntry entry = store.get(key);
+            if (entry != null) {
+                if (System.currentTimeMillis() > entry.expiryTime()) {
+                    synchronized (writeLock) {
+                        CacheEntry currentEntry = store.get(key);
+                        if (currentEntry != null && System.currentTimeMillis() > currentEntry.expiryTime()) {
+                            store.remove(key);
+                            evictionPolicy.onRemove(key);
+                            ttlEvictions.increment();
+                            metricsCollector.recordTtlEviction();
+                        }
                     }
+                    metricsCollector.recordMiss();
+                    return null;
                 }
-                return null;
+                evictionPolicy.onAccess(key);
+                metricsCollector.recordHit();
+            } else {
+                metricsCollector.recordMiss();
             }
-            evictionPolicy.onAccess(key);
+            return entry;
+        } finally {
+            metricsCollector.recordLatency(System.nanoTime() - start);
         }
-        return entry;
     }
 
     /**
@@ -88,26 +150,32 @@ public class CacheEngine {
         if (ttlSeconds != null && ttlSeconds <= 0) {
             throw new InvalidTtlException("TTL must be a positive integer.");
         }
-        synchronized (writeLock) {
-            long expiryTime = (ttlSeconds == null) ? Long.MAX_VALUE : (System.currentTimeMillis() + ttlSeconds * 1000);
-            boolean isUpdate = store.containsKey(key);
+        long start = System.nanoTime();
+        try {
+            synchronized (writeLock) {
+                long expiryTime = (ttlSeconds == null) ? Long.MAX_VALUE : (System.currentTimeMillis() + ttlSeconds * 1000);
+                boolean isUpdate = store.containsKey(key);
 
-            if (!isUpdate && store.size() >= maxCapacity) {
-                String victim = evictionPolicy.evictVictim();
-                if (victim == null) {
-                    throw new EvictionFailedException("Cache capacity reached and eviction was unable to free memory.");
+                if (!isUpdate && store.size() >= maxCapacity) {
+                    String victim = evictionPolicy.evictVictim();
+                    if (victim == null) {
+                        throw new EvictionFailedException("Cache capacity reached and eviction was unable to free memory.");
+                    }
+                    store.remove(victim);
+                    metricsCollector.recordPolicyEviction();
                 }
-                store.remove(victim);
-            }
 
-            CacheEntry entry = new CacheEntry(value, System.currentTimeMillis(), expiryTime, System.currentTimeMillis(), 1);
-            store.put(key, entry);
+                CacheEntry entry = new CacheEntry(value, System.currentTimeMillis(), expiryTime, System.currentTimeMillis(), 1);
+                store.put(key, entry);
 
-            if (isUpdate) {
-                evictionPolicy.onAccess(key);
-            } else {
-                evictionPolicy.onInsert(key);
+                if (isUpdate) {
+                    evictionPolicy.onAccess(key);
+                } else {
+                    evictionPolicy.onInsert(key);
+                }
             }
+        } finally {
+            metricsCollector.recordLatency(System.nanoTime() - start);
         }
     }
 
@@ -115,12 +183,17 @@ public class CacheEngine {
      * Delete operation. Returns the deleted CacheEntry if existed, else null.
      */
     public CacheEntry delete(String key) {
-        synchronized (writeLock) {
-            CacheEntry entry = store.remove(key);
-            if (entry != null) {
-                evictionPolicy.onRemove(key);
+        long start = System.nanoTime();
+        try {
+            synchronized (writeLock) {
+                CacheEntry entry = store.remove(key);
+                if (entry != null) {
+                    evictionPolicy.onRemove(key);
+                }
+                return entry;
             }
-            return entry;
+        } finally {
+            metricsCollector.recordLatency(System.nanoTime() - start);
         }
     }
 
@@ -135,6 +208,7 @@ public class CacheEngine {
                 store.remove(key);
                 evictionPolicy.onRemove(key);
                 ttlEvictions.increment();
+                metricsCollector.recordTtlEviction();
                 return true;
             }
         }
@@ -180,4 +254,30 @@ public class CacheEngine {
     public long getTtlEvictions() {
         return ttlEvictions.sum();
     }
+
+    /**
+     * Write-through semantic: writes to local cache, then synchronously writes to MockDatabase.
+     * Fails if DB write fails.
+     */
+    public void writeThrough(String key, String value) {
+        set(key, value);
+        mockDatabase.save(key, value);
+    }
+
+    /**
+     * Write-back semantic: writes to local cache, appends to queue, returns immediately.
+     */
+    public void writeBack(String key, String value) {
+        set(key, value);
+        writeBackQueue.offer(new WriteEvent(key, value));
+    }
+
+    /**
+     * Returns the size of the write-back queue.
+     */
+    public int getWriteBackQueueSize() {
+        return writeBackQueue.size();
+    }
+
+    public static record WriteEvent(String key, String value) {}
 }
