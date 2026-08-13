@@ -4,7 +4,9 @@ import com.portfolio.cairn.engine.evict.EvictionPolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.LongAdder;
 
 @Service
 public class CacheEngine {
@@ -12,6 +14,7 @@ public class CacheEngine {
     private final EvictionPolicy evictionPolicy;
     private final int maxCapacity;
     private final Object writeLock = new Object();
+    private final LongAdder ttlEvictions = new LongAdder();
 
     @Autowired
     public CacheEngine(
@@ -24,18 +27,45 @@ public class CacheEngine {
 
     /**
      * Checks if a key exists in the cache.
-     * Fast boolean lookup with no side effects on access metadata (no promotion).
+     * Fast boolean lookup with passive expiration checks.
      */
     public boolean exists(String key) {
-        return store.containsKey(key);
+        CacheEntry entry = store.get(key);
+        if (entry != null) {
+            if (System.currentTimeMillis() > entry.expiryTime()) {
+                synchronized (writeLock) {
+                    CacheEntry currentEntry = store.get(key);
+                    if (currentEntry != null && System.currentTimeMillis() > currentEntry.expiryTime()) {
+                        store.remove(key);
+                        evictionPolicy.onRemove(key);
+                        ttlEvictions.increment();
+                    }
+                }
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     /**
-     * Retrieve operation returning the CacheEntry wrapper and triggering policy promotion.
+     * Retrieve operation returning the CacheEntry wrapper and triggering policy promotion,
+     * including passive expiration checks.
      */
     public CacheEntry get(String key) {
         CacheEntry entry = store.get(key);
         if (entry != null) {
+            if (System.currentTimeMillis() > entry.expiryTime()) {
+                synchronized (writeLock) {
+                    CacheEntry currentEntry = store.get(key);
+                    if (currentEntry != null && System.currentTimeMillis() > currentEntry.expiryTime()) {
+                        store.remove(key);
+                        evictionPolicy.onRemove(key);
+                        ttlEvictions.increment();
+                    }
+                }
+                return null;
+            }
             evictionPolicy.onAccess(key);
         }
         return entry;
@@ -89,6 +119,30 @@ public class CacheEngine {
     }
 
     /**
+     * Evicts the key if it has expired. Used primarily by the background sweep.
+     * Returns true if evicted, false otherwise.
+     */
+    public boolean evictIfExpired(String key) {
+        synchronized (writeLock) {
+            CacheEntry entry = store.get(key);
+            if (entry != null && System.currentTimeMillis() > entry.expiryTime()) {
+                store.remove(key);
+                evictionPolicy.onRemove(key);
+                ttlEvictions.increment();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns a weakly-consistent iterator over the keys in the cache store.
+     */
+    public Iterator<String> getKeysIterator() {
+        return store.keySet().iterator();
+    }
+
+    /**
      * Clear the cache and remove keys from the eviction policy tracking.
      */
     public void clear() {
@@ -105,5 +159,12 @@ public class CacheEngine {
      */
     public int size() {
         return store.size();
+    }
+
+    /**
+     * Returns the total count of key-level TTL expirations.
+     */
+    public long getTtlEvictions() {
+        return ttlEvictions.sum();
     }
 }
