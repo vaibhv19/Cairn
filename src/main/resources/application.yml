@@ -27,4 +27,7 @@ management:
 spring:
   main:
     allow-bean-definition-overriding: true
+  threads:
+    virtual:
+      enabled: true
 

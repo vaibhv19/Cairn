@@ -16,7 +16,7 @@ Cairn follows the standard Maven directory structure, separating application log
 ```
 cairn/
 ├── .git/
-├── Docs/                              # v0.1.0 Complete Documentation Suite
+├── Docs/                              # Complete Documentation Suite
 │   ├── Cairn — Feature List.md
 │   ├── PRD.md
 │   ├── TechStack.md
@@ -25,7 +25,8 @@ cairn/
 │   ├── UIDesign.md
 │   ├── FolderStructure.md
 │   ├── DBSchema.md
-│   └── APIContracts.md
+│   ├── APIContracts.md
+│   └── DASHBOARD_DESIGN.md
 ├── pom.xml                            # Maven configuration file
 └── src/
     ├── main/
@@ -37,12 +38,15 @@ cairn/
     │   │               ├── config/                    # Spring Beans & configs
     │   │               │   ├── CacheConfig.java
     │   │               │   └── SchedulerConfig.java
-    │   │               ├── controller/                # REST Controllers (API Layer)
+    │   │               ├── web/                       # Web layer (REST API Layer)
     │   │               │   ├── CacheController.java
+    │   │               │   ├── CacheDtos.java
+    │   │               │   ├── GlobalExceptionHandler.java
     │   │               │   └── RoutingController.java # [Phase 2] Routing endpoint
     │   │               ├── engine/                    # Core Cache Engine
     │   │               │   ├── CacheEngine.java       # Coordinates storage & policies
     │   │               │   ├── CacheEntry.java        # Core in-memory data record
+    │   │               │   ├── MockDatabase.java      # Mock persistence store
     │   │               │   └── evict/                 # Eviction Policy Strategy
     │   │               │       ├── EvictionPolicy.java# Strategy interface
     │   │               │       ├── LruEvictionPolicy.java
@@ -54,8 +58,7 @@ cairn/
     │   │               │   ├── NodeRouter.java        # Client-side / proxy routing
     │   │               │   └── NodeConfig.java
     │   │               └── metrics/                   # [Phase 3] Actuator & Counters
-    │   │                   ├── CacheMetricsCollector.java
-    │   │                   └── InvalidationService.java
+    │   │                   └── CacheMetricsCollector.java
     │   └── resources/
     │       ├── application.yml        # Service properties (ports, static nodes)
     │       └── logback-spring.xml     # Logging configuration
@@ -65,13 +68,25 @@ cairn/
                 └── portfolio/
                     └── cairn/
                         ├── unit/                      # Standard unit tests
+                        │   ├── CacheControllerTest.java
                         │   ├── CacheEngineTest.java
+                        │   ├── CacheEvictionIntegrationTest.java
+                        │   ├── CacheExpiryTest.java
+                        │   ├── CacheInvalidationTest.java
+                        │   ├── CacheMetricsActuatorTest.java
+                        │   ├── CacheMetricsCollectorTest.java
+                        │   ├── ConsistentHashRingTest.java
                         │   ├── LruEvictionTest.java
-                        │   └── LfuEvictionTest.java
+                        │   ├── LfuEvictionTest.java
+                        │   ├── NodeConfigTest.java
+                        │   ├── NodeRouterTest.java
+                        │   ├── RoutingControllerTest.java
+                        │   └── WriteSemanticsTest.java
                         └── concurrency/               # High-contention stress tests
-                            ├── ConcurrentReadWriteTest.java
+                            ├── ConcurrentEvictionIntegrationTest.java
+                            ├── ConcurrentExpiryTest.java
                             ├── EvictionRaceConditionTest.java
-                            └── ExpirySweepSafetyTest.java
+                            └── FullSystemConcurrencyTest.java
 ```
 
 ---
@@ -83,17 +98,19 @@ cairn/
 * **`CacheEntry.java`**: Represents the in-memory object stored inside the primary map. Holds the user value payload and metadata (creation time, TTL, last-access timestamp, access frequency).
 * **`evict/`**: Implements the Strategy Pattern. Contains the interface and swappable Spring component implementations (`LruEvictionPolicy`, `LfuEvictionPolicy`) to keep eviction logic modular.
 
-### 2.2 API Layer (`/controller`)
-* **`CacheController.java`**: Houses REST routes, mapping HTTP requests (`GET`, `POST`, `DELETE`) to the `CacheEngine` operations.
-* **`RoutingController.java`** *[Phase 2]*: Handles routing coordination and node status checks in the static cluster environment.
+### 2.2 API Layer (`/web`)
+* **`CacheController.java`**: Houses REST routes, mapping HTTP requests (`GET`, `POST`, `DELETE`) to the `CacheEngine` operations via NodeRouter.
+* **`CacheDtos.java`**: Standard DTO requests and responses with Jakarta Validation constraints.
+* **`GlobalExceptionHandler.java`**: Global exception mapper mapping custom exceptions to standard HTTP error structures.
+* **`RoutingController.java`**: Handles routing coordination and node status checks in the static cluster environment.
 
 ### 2.3 Expiration & Sweeps (`/expire`)
 * Contains tasks and thread pool handlers running background tasks. Resolves active key expirations asynchronously using `ScheduledExecutorService` parameters.
 
-### 2.4 Sharding & Consistent Hashing (`/sharding`) *[Phase 2]*
+### 2.4 Sharding & Consistent Hashing (`/sharding`)
 * Contains files representing virtual node configuration mapping, key hashing routines, node target calculation on the hashing ring, and node failover simulations.
 
-### 2.5 Metrics & Invalidation (`/metrics`) *[Phase 3]*
+### 2.5 Metrics & Invalidation (`/metrics`)
 * Contains metrics counters and invalidation logic to clear cache contents manually or dynamically.
 
 ---
@@ -109,12 +126,13 @@ Because Cairn’s core goal is to verify thread safety and lock performance unde
 
 ## 4. `/docs` Folder Inventory
 
-The `/Docs` folder contains the complete, MAANG-level v0.1.0 documentation set required for the Cairn project milestone:
+The `/Docs` folder contains the complete, MAANG-level documentation set required for the Cairn project milestone:
 * **`PRD.md`**: Core product goals, requirements, success metrics, and twin comparison scope.
 * **`TechStack.md`**: Architectural justifications for Java 21, Spring Boot, `ConcurrentHashMap`, and locking choices.
 * **`SystemArchitecture.md`**: Internal component layouts, thread models, locking barriers, and sharding topology.
 * **`AppFlow.md`**: Request lifecycles, contention sequences, background sweep execution, and data flow steps.
 * **`UIDesign.md`**: REST API JSON structures and Phase 3 operator metrics dashboard wireframe.
 * **`FolderStructure.md`**: Application package layouts, test isolation mapping, and document directories (this document).
-* **`DBSchema.md`**: Internal in-memory record layout and structural non-goals.
+* **`DBSchema.md`**: In-memory record layout and structural non-goals.
 * **`APIContracts.md`**: Complete URL routing, JSON payloads, and HTTP error mappings across all phases.
+* **`DASHBOARD_DESIGN.md`**: Core visual design guidelines, typography, color palette, and layout principles for the Phase 3 dashboard.
