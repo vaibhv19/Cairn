@@ -59,6 +59,18 @@ The core single-node cache operations are exposed via standard REST paths. All r
       "timestamp": "2026-08-13T09:13:29.112Z"
     }
     ```
+* **Response (Edge Case - Eviction Failure / Out of Memory):**
+  * **Status Code:** `507 Insufficient Storage`
+  * **Note:** Edge case — occurs only if `max-size` is misconfigured to a non-positive value, leaving no valid eviction victim.
+  * **Response Body:**
+    ```json
+    {
+      "status": "error",
+      "errorCode": "EVICTION_FAILED",
+      "message": "Cache capacity reached and eviction was unable to free memory.",
+      "timestamp": "2026-08-13T09:12:11.452Z"
+    }
+    ```
 
 ---
 
