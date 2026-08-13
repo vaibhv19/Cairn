@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-@Component("lruEvictionPolicy")
 public class LruEvictionPolicy implements EvictionPolicy {
 
     private static class LruNode {

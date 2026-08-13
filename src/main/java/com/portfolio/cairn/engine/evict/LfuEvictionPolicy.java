@@ -6,7 +6,6 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-@Component("lfuEvictionPolicy")
 public class LfuEvictionPolicy implements EvictionPolicy {
 
     private final Map<String, Integer> keyToFreq = new HashMap<>();
