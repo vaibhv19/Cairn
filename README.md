@@ -49,6 +49,43 @@ graph TD
     CacheEngine -->|Record Event| MetricsCollector
 ```
 
+### Consistent Hashing Ring (Distributed Routing)
+
+In a sharded cluster (Phase 2), cache operations are routed to target nodes using a consistent hashing ring. Keys are mapped via a Murmur3 hash function onto a `TreeMap`-backed ring. Each physical node registers 150 virtual nodes on the ring to prevent hot-spot key concentration:
+
+```mermaid
+graph TD
+    %% Ring representation (clockwise routing)
+    subgraph Hashing Ring [Consistent Hashing Ring (0 to 2^32 - 1)]
+        vA1["Node A (Virtual v1)<br/>Hash: 0x20000000"]
+        vB1["Node B (Virtual v1)<br/>Hash: 0x50000000"]
+        vA2["Node A (Virtual v2)<br/>Hash: 0x80000000"]
+        vC1["Node C (Virtual v1)<br/>Hash: 0xB0000000"]
+        vB2["Node B (Virtual v2)<br/>Hash: 0xE0000000"]
+        
+        vA1 --> vB1
+        vB1 --> vA2
+        vA2 --> vC1
+        vC1 --> vB2
+        vB2 --> vA1
+    end
+
+    %% Key Routing Example
+    KeyHash["Key: 'user:123'<br/>Hash: 0x65A0F21A"]
+    KeyHash -.->|1. Hash & Lookup tailMap| vA2
+    vA2 -->|2. Route to physical node| PhysicalA[Physical Node A]
+    
+    style Hashing Ring fill:#111b27,stroke:#38bdf8,stroke-width:2px,color:#fff
+    style vA1 fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#fff
+    style vA2 fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#fff
+    style vB1 fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style vB2 fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style vC1 fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#fff
+    style KeyHash fill:#0f172a,stroke:#ec4899,stroke-width:2px,color:#fff,stroke-dasharray: 5 5
+    style PhysicalA fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#fff
+```
+*(Source code diagram saved under [consistent_hashing_ring.mermaid](file:///d:/Coding/Projects----For%20Resume/Cairn/Docs/assets/consistent_hashing_ring.mermaid))*
+
 ---
 
 ## Features

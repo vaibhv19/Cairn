@@ -2,7 +2,7 @@ package com.portfolio.cairn.engine.evict;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class LruEvictionPolicy implements EvictionPolicy {
 
@@ -20,24 +20,24 @@ public class LruEvictionPolicy implements EvictionPolicy {
     private LruNode head = null;
     private LruNode tail = null;
 
-    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final ReentrantLock lock = new ReentrantLock();
 
     @Override
     public void onAccess(String key) {
-        lock.readLock().lock();
+        lock.lock();
         try {
             LruNode node = nodeMap.get(key);
             if (node != null) {
                 promote(node);
             }
         } finally {
-            lock.readLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public void onInsert(String key) {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             if (nodeMap.containsKey(key)) {
                 promote(nodeMap.get(key));
@@ -47,26 +47,26 @@ public class LruEvictionPolicy implements EvictionPolicy {
                 addFirst(node);
             }
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public void onRemove(String key) {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             LruNode node = nodeMap.remove(key);
             if (node != null) {
                 remove(node);
             }
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public String evictVictim() {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             if (tail == null) {
                 return null;
@@ -76,13 +76,13 @@ public class LruEvictionPolicy implements EvictionPolicy {
             remove(tail);
             return victimKey;
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
-    // --- Helper Doubly-Linked List Mutations (Synchronized for ReadLock promotion safety) ---
+    // --- Helper Doubly-Linked List Mutations (Called under outer ReentrantLock lock) ---
 
-    private synchronized void promote(LruNode node) {
+    private void promote(LruNode node) {
         if (node == head) {
             return;
         }
@@ -90,11 +90,11 @@ public class LruEvictionPolicy implements EvictionPolicy {
         addFirstNode(node);
     }
 
-    private synchronized void remove(LruNode node) {
+    private void remove(LruNode node) {
         removeNode(node);
     }
 
-    private synchronized void addFirst(LruNode node) {
+    private void addFirst(LruNode node) {
         addFirstNode(node);
     }
 
@@ -126,56 +126,76 @@ public class LruEvictionPolicy implements EvictionPolicy {
 
     // --- Public helper methods for test assertions ---
 
-    public synchronized String getHeadKey() {
-        return head != null ? head.key : null;
+    public String getHeadKey() {
+        lock.lock();
+        try {
+            return head != null ? head.key : null;
+        } finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized String getTailKey() {
-        return tail != null ? tail.key : null;
+    public String getTailKey() {
+        lock.lock();
+        try {
+            return tail != null ? tail.key : null;
+        } finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized int getMapSize() {
-        return nodeMap.size();
+    public int getMapSize() {
+        lock.lock();
+        try {
+            return nodeMap.size();
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
      * Validates doubly-linked list integrity (no cycles, head-tail matches count).
      * @return true if valid, false if corrupt.
      */
-    public synchronized boolean checkIntegrity() {
-        int forwardCount = 0;
-        LruNode current = head;
-        LruNode prevNode = null;
-        while (current != null) {
-            forwardCount++;
-            if (current.prev != prevNode) {
-                return false; // Broken backward link
+    public boolean checkIntegrity() {
+        lock.lock();
+        try {
+            int forwardCount = 0;
+            LruNode current = head;
+            LruNode prevNode = null;
+            while (current != null) {
+                forwardCount++;
+                if (current.prev != prevNode) {
+                    return false; // Broken backward link
+                }
+                if (forwardCount > nodeMap.size()) {
+                    return false; // Cycle detected
+                }
+                prevNode = current;
+                current = current.next;
             }
-            if (forwardCount > nodeMap.size()) {
-                return false; // Cycle detected
+            if (prevNode != tail) {
+                return false; // Last node traversed is not tail
             }
-            prevNode = current;
-            current = current.next;
-        }
-        if (prevNode != tail) {
-            return false; // Last node traversed is not tail
-        }
 
-        int backwardCount = 0;
-        current = tail;
-        LruNode nextNode = null;
-        while (current != null) {
-            backwardCount++;
-            if (current.next != nextNode) {
-                return false; // Broken forward link
+            int backwardCount = 0;
+            current = tail;
+            LruNode nextNode = null;
+            while (current != null) {
+                backwardCount++;
+                if (current.next != nextNode) {
+                    return false; // Broken forward link
+                }
+                nextNode = current;
+                current = current.prev;
             }
-            nextNode = current;
-            current = current.prev;
-        }
-        if (nextNode != head) {
-            return false; // First node backward-traversed is not head
-        }
+            if (nextNode != head) {
+                return false; // First node backward-traversed is not head
+            }
 
-        return forwardCount == nodeMap.size() && backwardCount == nodeMap.size();
+            return forwardCount == nodeMap.size() && backwardCount == nodeMap.size();
+        } finally {
+            lock.unlock();
+        }
     }
 }

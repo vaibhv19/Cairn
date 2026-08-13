@@ -14,13 +14,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 public class CacheEngine {
     private final ConcurrentHashMap<String, CacheEntry> store = new ConcurrentHashMap<>();
     private final EvictionPolicy evictionPolicy;
     private final int maxCapacity;
-    private final Object writeLock = new Object();
+    private final ReentrantLock writeLock = new ReentrantLock();
     private final LongAdder ttlEvictions = new LongAdder();
     
     private final MockDatabase mockDatabase;
@@ -87,13 +88,16 @@ public class CacheEngine {
         CacheEntry entry = store.get(key);
         if (entry != null) {
             if (System.currentTimeMillis() > entry.expiryTime()) {
-                synchronized (writeLock) {
+                writeLock.lock();
+                try {
                     CacheEntry currentEntry = store.get(key);
                     if (currentEntry != null && System.currentTimeMillis() > currentEntry.expiryTime()) {
                         store.remove(key);
                         evictionPolicy.onRemove(key);
                         ttlEvictions.increment();
                     }
+                } finally {
+                    writeLock.unlock();
                 }
                 return false;
             }
@@ -112,7 +116,8 @@ public class CacheEngine {
             CacheEntry entry = store.get(key);
             if (entry != null) {
                 if (System.currentTimeMillis() > entry.expiryTime()) {
-                    synchronized (writeLock) {
+                    writeLock.lock();
+                    try {
                         CacheEntry currentEntry = store.get(key);
                         if (currentEntry != null && System.currentTimeMillis() > currentEntry.expiryTime()) {
                             store.remove(key);
@@ -120,6 +125,8 @@ public class CacheEngine {
                             ttlEvictions.increment();
                             metricsCollector.recordTtlEviction();
                         }
+                    } finally {
+                        writeLock.unlock();
                     }
                     metricsCollector.recordMiss();
                     return null;
@@ -152,7 +159,8 @@ public class CacheEngine {
         }
         long start = System.nanoTime();
         try {
-            synchronized (writeLock) {
+            writeLock.lock();
+            try {
                 long expiryTime = (ttlSeconds == null) ? Long.MAX_VALUE : (System.currentTimeMillis() + ttlSeconds * 1000);
                 boolean isUpdate = store.containsKey(key);
 
@@ -173,6 +181,8 @@ public class CacheEngine {
                 } else {
                     evictionPolicy.onInsert(key);
                 }
+            } finally {
+                writeLock.unlock();
             }
         } finally {
             metricsCollector.recordLatency(System.nanoTime() - start);
@@ -185,12 +195,15 @@ public class CacheEngine {
     public CacheEntry delete(String key) {
         long start = System.nanoTime();
         try {
-            synchronized (writeLock) {
+            writeLock.lock();
+            try {
                 CacheEntry entry = store.remove(key);
                 if (entry != null) {
                     evictionPolicy.onRemove(key);
                 }
                 return entry;
+            } finally {
+                writeLock.unlock();
             }
         } finally {
             metricsCollector.recordLatency(System.nanoTime() - start);
@@ -202,7 +215,8 @@ public class CacheEngine {
      * Returns true if evicted, false otherwise.
      */
     public boolean evictIfExpired(String key) {
-        synchronized (writeLock) {
+        writeLock.lock();
+        try {
             CacheEntry entry = store.get(key);
             if (entry != null && System.currentTimeMillis() > entry.expiryTime()) {
                 store.remove(key);
@@ -211,6 +225,8 @@ public class CacheEngine {
                 metricsCollector.recordTtlEviction();
                 return true;
             }
+        } finally {
+            writeLock.unlock();
         }
         return false;
     }
@@ -226,11 +242,14 @@ public class CacheEngine {
      * Clear the cache and remove keys from the eviction policy tracking.
      */
     public void clear() {
-        synchronized (writeLock) {
+        writeLock.lock();
+        try {
             for (String key : store.keySet()) {
                 evictionPolicy.onRemove(key);
             }
             store.clear();
+        } finally {
+            writeLock.unlock();
         }
     }
 

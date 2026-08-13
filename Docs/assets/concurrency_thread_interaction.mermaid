@@ -1,0 +1,26 @@
+sequenceDiagram
+    autonumber
+    actor ClientThread as Request Thread (Read/Write)
+    actor ExpiryThread as Background Expiry Thread
+    participant Lock as Mutex / RWLock
+    participant Storage as ConcurrentHashMap Segmented Store
+    
+    Note over ClientThread: Check Key Expiry (GET)
+    alt Key Expired
+        ClientThread->>Lock: Acquire WRITE Lock
+        ClientThread->>Storage: Delete key & update metadata
+        ClientThread->>Lock: Release WRITE Lock
+    else Key Active
+        ClientThread->>Lock: Acquire READ Lock
+        ClientThread->>Storage: Update Eviction stats (LRU/LFU)
+        ClientThread->>Lock: Release READ Lock
+    end
+
+    Note over ExpiryThread: Sample Keys sequentially (Probabilistic sweep)
+    alt Sampled Key Expired
+        ExpiryThread->>Lock: Acquire WRITE Lock
+        ExpiryThread->>Storage: Delete key & update metadata
+        ExpiryThread->>Lock: Release WRITE Lock
+    else Sampled Key Valid
+        Note over ExpiryThread: Skip Key (No action)
+    end

@@ -3,7 +3,7 @@ package com.portfolio.cairn.engine.evict;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class LfuEvictionPolicy implements EvictionPolicy {
 
@@ -11,23 +11,23 @@ public class LfuEvictionPolicy implements EvictionPolicy {
     private final Map<Integer, LinkedHashSet<String>> freqToKeys = new HashMap<>();
     private int minFrequency = -1;
 
-    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final ReentrantLock lock = new ReentrantLock();
 
     @Override
     public void onAccess(String key) {
-        lock.readLock().lock();
+        lock.lock();
         try {
             if (keyToFreq.containsKey(key)) {
                 promote(key);
             }
         } finally {
-            lock.readLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public void onInsert(String key) {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             if (keyToFreq.containsKey(key)) {
                 promote(key);
@@ -35,25 +35,25 @@ public class LfuEvictionPolicy implements EvictionPolicy {
                 insertNew(key);
             }
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public void onRemove(String key) {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             if (keyToFreq.containsKey(key)) {
                 removeKey(key);
             }
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public String evictVictim() {
-        lock.writeLock().lock();
+        lock.lock();
         try {
             if (keyToFreq.isEmpty()) {
                 return null;
@@ -67,13 +67,13 @@ public class LfuEvictionPolicy implements EvictionPolicy {
             removeKey(victimKey);
             return victimKey;
         } finally {
-            lock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
-    // --- Helper LFU Mutations (Synchronized for ReadLock promotion safety) ---
+    // --- Helper LFU Mutations (Called under outer ReentrantLock lock) ---
 
-    private synchronized void promote(String key) {
+    private void promote(String key) {
         int freq = keyToFreq.get(key);
         int newFreq = freq + 1;
         keyToFreq.put(key, newFreq);
@@ -87,13 +87,13 @@ public class LfuEvictionPolicy implements EvictionPolicy {
         freqToKeys.computeIfAbsent(newFreq, k -> new LinkedHashSet<>()).add(key);
     }
 
-    private synchronized void insertNew(String key) {
+    private void insertNew(String key) {
         keyToFreq.put(key, 1);
         freqToKeys.computeIfAbsent(1, k -> new LinkedHashSet<>()).add(key);
         minFrequency = 1;
     }
 
-    private synchronized void removeKey(String key) {
+    private void removeKey(String key) {
         int freq = keyToFreq.remove(key);
         LinkedHashSet<String> set = freqToKeys.get(freq);
         if (set != null) {
@@ -119,43 +119,63 @@ public class LfuEvictionPolicy implements EvictionPolicy {
 
     // --- Public helper methods for test assertions ---
 
-    public synchronized int getMapSize() {
-        return keyToFreq.size();
+    public int getMapSize() {
+        lock.lock();
+        try {
+            return keyToFreq.size();
+        } finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized Integer getFrequency(String key) {
-        return keyToFreq.get(key);
+    public Integer getFrequency(String key) {
+        lock.lock();
+        try {
+            return keyToFreq.get(key);
+        } finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized int getMinFrequency() {
-        return minFrequency;
+    public int getMinFrequency() {
+        lock.lock();
+        try {
+            return minFrequency;
+        } finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized boolean checkIntegrity() {
-        int totalSetSize = 0;
-        for (Map.Entry<Integer, LinkedHashSet<String>> entry : freqToKeys.entrySet()) {
-            LinkedHashSet<String> set = entry.getValue();
-            if (set != null) {
-                totalSetSize += set.size();
-                for (String key : set) {
-                    if (!keyToFreq.containsKey(key)) {
-                        return false; // Key in set but not in frequency map
-                    }
-                    if (keyToFreq.get(key) != entry.getKey()) {
-                        return false; // Key in set of wrong frequency
+    public boolean checkIntegrity() {
+        lock.lock();
+        try {
+            int totalSetSize = 0;
+            for (Map.Entry<Integer, LinkedHashSet<String>> entry : freqToKeys.entrySet()) {
+                LinkedHashSet<String> set = entry.getValue();
+                if (set != null) {
+                    totalSetSize += set.size();
+                    for (String key : set) {
+                        if (!keyToFreq.containsKey(key)) {
+                            return false; // Key in set but not in frequency map
+                        }
+                        if (keyToFreq.get(key) != entry.getKey()) {
+                            return false; // Key in set of wrong frequency
+                        }
                     }
                 }
             }
-        }
-        if (totalSetSize != keyToFreq.size()) {
-            return false; // Mismatched sizes
-        }
-        if (!keyToFreq.isEmpty()) {
-            LinkedHashSet<String> minSet = freqToKeys.get(minFrequency);
-            if (minSet == null || minSet.isEmpty()) {
-                return false; // Invalid minFrequency
+            if (totalSetSize != keyToFreq.size()) {
+                return false; // Mismatched sizes
             }
+            if (!keyToFreq.isEmpty()) {
+                LinkedHashSet<String> minSet = freqToKeys.get(minFrequency);
+                if (minSet == null || minSet.isEmpty()) {
+                    return false; // Invalid minFrequency
+                }
+            }
+            return true;
+        } finally {
+            lock.unlock();
         }
-        return true;
     }
 }

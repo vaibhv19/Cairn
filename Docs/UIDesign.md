@@ -125,40 +125,72 @@ The Phase 3 dashboard is a diagnostic tool used to compare performance. For exam
 
 ### 3.1 Dashboard Layout Design (ASCII Wireframe)
 
+```mermaid
+flowchart TB
+    subgraph Dashboard ["Cairn Dashboard UI Layout Structure"]
+        direction TB
+
+        %% Header
+        subgraph Header ["Header Area"]
+            Title["Title: CAIRN CACHE - DISTRIBUTED METRICS DASHBOARD"]
+            Controls["Controls: Auto-Refresh Toggle | Cluster Config Summary | Active Eviction Policy (LRU/LFU)"]
+        end
+
+        %% Node Cards Row
+        subgraph NodesRow ["Cluster Health Cards Row"]
+            direction LR
+            NodeA["Node A Card<br/>Status: Active<br/>Keys: 12.4k/20k<br/>CPU: 12% | Mem: 34MB"]
+            NodeB["Node B Card<br/>Status: Active<br/>Keys: 12.1k/20k<br/>CPU: 14% | Mem: 32MB"]
+            NodeC["Node C Card<br/>Status: Active<br/>Keys: 12.8k/20k<br/>CPU: 11% | Mem: 36MB"]
+        end
+
+        %% Operational Metrics Section
+        subgraph MetricsSection ["Operational Metrics Section"]
+            direction LR
+            subgraph HitMissCol ["Throughput & Efficiency"]
+                HitMissGauge["Hit/Miss Ratio Gauge<br/>(Aggregated Hits vs Misses %)"]
+            end
+            subgraph LatencyCol ["Performance & Percentiles"]
+                LatencyChart["Latency Percentiles Chart<br/>(p50, p95, p99 GET/SET/DELETE)"]
+            end
+        end
+
+        %% Eviction & Expiry Section
+        subgraph EvictionSection ["Eviction Event Counters Row"]
+            direction LR
+            TTLExpirations["TTL Expirations Counter<br/>(Passive/Active Sweeper Reclaims)"]
+            CapacityEvictions["Capacity Evictions Counter<br/>(LRU/LFU Key Expulsions)"]
+        end
+
+        %% Logs Stream Section
+        subgraph LogsSection ["System Logs & Metrics Stream"]
+            LogConsole["Real-time Console Stream<br/>(Node status updates, policy alerts, sweeps)"]
+        end
+
+        Header --> NodesRow
+        NodesRow --> MetricsSection
+        MetricsSection --> EvictionSection
+        EvictionSection --> LogsSection
+    end
+
+    %% Styles
+    style Dashboard fill:#0f172a,stroke:#334155,stroke-width:2px,color:#fff
+    style Header fill:#1e293b,stroke:#475569,stroke-width:1px,color:#fff
+    style NodesRow fill:#1e293b,stroke:#475569,stroke-width:1px,color:#fff
+    style MetricsSection fill:#1e293b,stroke:#475569,stroke-width:1px,color:#fff
+    style EvictionSection fill:#1e293b,stroke:#475569,stroke-width:1px,color:#fff
+    style LogsSection fill:#1e293b,stroke:#475569,stroke-width:1px,color:#fff
+    
+    style NodeA fill:#022c22,stroke:#10b981,stroke-width:2px,color:#fff
+    style NodeB fill:#022c22,stroke:#10b981,stroke-width:2px,color:#fff
+    style NodeC fill:#022c22,stroke:#10b981,stroke-width:2px,color:#fff
+    style HitMissGauge fill:#172554,stroke:#3b82f6,stroke-width:1px,color:#fff
+    style LatencyChart fill:#3b0764,stroke:#a855f7,stroke-width:1px,color:#fff
+    style TTLExpirations fill:#1c1917,stroke:#78716c,stroke-width:1px,color:#fff
+    style CapacityEvictions fill:#451a03,stroke:#f97316,stroke-width:1px,color:#fff
+    style LogConsole fill:#0c0a09,stroke:#292524,stroke-dasharray: 5 5,color:#a8a29e
 ```
-========================================================================================
- CAIRN CACHE - DISTRIBUTED METRICS DASHBOARD                               [Refresh: Auto]
-========================================================================================
- [ Cluster Configuration: 3 Nodes (Static) ]  [ Eviction Policy Active: LRU ]
- 
- +---------------------------+ +---------------------------+ +---------------------------+
- | Node A: http://127.0.0.1  | | Node B: http://127.0.0.1  | | Node C: http://127.0.0.1  |
- | Status: ACTIVE            | | Status: ACTIVE            | | Status: ACTIVE            |
- | Keys: 12,450 / 20,000     | | Keys: 12,110 / 20,000     | | Keys: 12,890 / 20,000     |
- | CPU: 12% | Mem: 34MB/128MB| | CPU: 14% | Mem: 32MB/128MB| | CPU: 11% | Mem: 36MB/128MB|
- +---------------------------+ +---------------------------+ +---------------------------+
-
-----------------------------------------------------------------------------------------
- OPERATIONAL METRICS OVERVIEW
-----------------------------------------------------------------------------------------
- Hits / Misses Ratio Chart (Aggregated)             Operation Latency Percentiles (p99)
- +-------------------------------------------+     +-----------------------------------+
- | 85% [########################-------] 15% |     | GET: 1.12 ms                      |
- |      Cache Hits           Cache Misses    |     | SET: 2.45 ms                      |
- +-------------------------------------------+     | DELETE: 0.98 ms                   |
-                                                   +-----------------------------------+
-
- Eviction Event Counters
- +-------------------------------------------------------------------------------------+
- | Active TTL Sweeper Expirations: [ 1,452 ]  | Capacity Policy Evictions: [ 451 ]     |
- +-------------------------------------------------------------------------------------+
-
-----------------------------------------------------------------------------------------
- SYSTEM LOGS & METRICS STREAM
- [09:12:00] [Node A] Policy Eviction triggered - Expelled key [user:session:990]
- [09:12:05] [Node B] Background Expiry Sweep complete. 12 stale keys reclaimed.
-========================================================================================
-```
+*(Source code diagram saved under [dashboard_layout.mermaid](file:///d:/Coding/Projects----For%20Resume/Cairn/Docs/assets/dashboard_layout.mermaid))*
 *Memory figures are informational only — Cairn enforces capacity via key-count limits (`cairn.cache.max-size`) per PRD §8 Q1; memory-based capacity enforcement is an unimplemented future consideration, not an active constraint.*
 
 ### 3.2 Key Visualizations & Charts

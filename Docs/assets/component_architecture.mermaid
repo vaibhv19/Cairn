@@ -1,0 +1,36 @@
+graph TD
+    Client[Client / Benchmark Runner]
+    
+    subgraph Cluster Layer (Phase 2)
+        Routing[Routing / Proxy Layer]
+        ConsistentHash[Consistent Hashing Ring]
+    end
+
+    subgraph "Cairn Node (JVM Instance)"
+        REST[Spring REST Controller]
+        CacheEngine[Cache Engine Core]
+        Storage[(ConcurrentHashMap Segmented Store)]
+        
+        subgraph Eviction Engine
+            EvictionStrategy["Eviction Strategy (LRU/LFU Bean)"]
+            RWLock[ReentrantReadWriteLock]
+        end
+        
+        subgraph Expiration Engine
+            ActiveExpiry["Active Expiry Sweeper (Scheduled Threads)"]
+        end
+
+        subgraph Metrics Engine
+            MetricsCollector[Micrometer Counter / LongAdder]
+        end
+    end
+
+    Client -->|HTTP Request| Routing
+    Routing -->|Lookup Ring| ConsistentHash
+    Routing -->|Proxy Request| REST
+    REST -->|Cache Commands| CacheEngine
+    CacheEngine <-->|Read / Write Entry| Storage
+    CacheEngine -->|Lock & Update Pointers| RWLock
+    RWLock --> EvictionStrategy
+    ActiveExpiry -->|Background Expiry Sweep| CacheEngine
+    CacheEngine -->|Record Event| MetricsCollector

@@ -67,22 +67,35 @@ graph TD
 
 The primary differentiator of Cairn is its safety under true multi-threaded parallel execution. Unlike Python, where thread execution is serialized, multiple JVM threads can execute Cairn cache logic at the same physical instance in time.
 
+```mermaid
+sequenceDiagram
+    autonumber
+    actor ClientThread as Request Thread (Read/Write)
+    actor ExpiryThread as Background Expiry Thread
+    participant Lock as Mutex / RWLock
+    participant Storage as ConcurrentHashMap Segmented Store
+    
+    Note over ClientThread: Check Key Expiry (GET)
+    alt Key Expired
+        ClientThread->>Lock: Acquire WRITE Lock
+        ClientThread->>Storage: Delete key & update metadata
+        ClientThread->>Lock: Release WRITE Lock
+    else Key Active
+        ClientThread->>Lock: Acquire READ Lock
+        ClientThread->>Storage: Update Eviction stats (LRU/LFU)
+        ClientThread->>Lock: Release READ Lock
+    end
+
+    Note over ExpiryThread: Sample Keys sequentially (Probabilistic sweep)
+    alt Sampled Key Expired
+        ExpiryThread->>Lock: Acquire WRITE Lock
+        ExpiryThread->>Storage: Delete key & update metadata
+        ExpiryThread->>Lock: Release WRITE Lock
+    else Sampled Key Valid
+        Note over ExpiryThread: Skip Key (No action)
+    end
 ```
-Request Thread (Read/Write)                Background Expiration Sweep Thread
-      |                                                |
-      v                                                v
-Check Key Expiry (GET)                          Sample Keys sequentially
-  - If Expired:                                 - If Expired:
-    Acquire WRITE Lock                            Acquire WRITE Lock
-    Delete key & update metadata                  Delete key & update metadata
-    Release WRITE Lock                            Release WRITE Lock
-  - If Active:                                  - If Valid:
-    Acquire READ Lock                             Skip Key
-    Update Eviction stats (LRU/LFU)               Release WRITE Lock (if held)
-    Release READ Lock                                  |
-      |                                                v
-      +------------------ MUTEX / LOCKS ---------------+
-```
+*(Source code diagram saved under [concurrency_thread_interaction.mermaid](file:///d:/Coding/Projects----For%20Resume/Cairn/Docs/assets/concurrency_thread_interaction.mermaid))*
 
 ### 2.1 Synchronization Boundaries
 * **Index Access:** The primary `ConcurrentHashMap` handles thread safety for basic lookups. Individual hash buckets are locked for updates, but read queries remain entirely lock-free.
@@ -103,16 +116,38 @@ To prevent background operations from bottlenecking active user requests, expira
 
 Consistent hashing allows the cache to scale horizontally across multiple static JVM processes.
 
+```mermaid
+graph TD
+    %% Ring representation (clockwise routing)
+    subgraph Hashing Ring [Consistent Hashing Ring (0 to 2^32 - 1)]
+        vA1["Node A (Virtual v1)<br/>Hash: 0x20000000"]
+        vB1["Node B (Virtual v1)<br/>Hash: 0x50000000"]
+        vA2["Node A (Virtual v2)<br/>Hash: 0x80000000"]
+        vC1["Node C (Virtual v1)<br/>Hash: 0xB0000000"]
+        vB2["Node B (Virtual v2)<br/>Hash: 0xE0000000"]
+        
+        vA1 --> vB1
+        vB1 --> vA2
+        vA2 --> vC1
+        vC1 --> vB2
+        vB2 --> vA1
+    end
+
+    %% Key Routing Example
+    KeyHash["Key: 'user:123'<br/>Hash: 0x65A0F21A"]
+    KeyHash -.->|1. Hash & Lookup tailMap| vA2
+    vA2 -->|2. Route to physical node| PhysicalA[Physical Node A]
+    
+    style Hashing Ring fill:#111b27,stroke:#38bdf8,stroke-width:2px,color:#fff
+    style vA1 fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#fff
+    style vA2 fill:#1e293b,stroke:#10b981,stroke-width:2px,color:#fff
+    style vB1 fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style vB2 fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style vC1 fill:#1e293b,stroke:#f59e0b,stroke-width:2px,color:#fff
+    style KeyHash fill:#0f172a,stroke:#ec4899,stroke-width:2px,color:#fff,stroke-dasharray: 5 5
+    style PhysicalA fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#fff
 ```
-       Consistent Hashing Ring (0 - 2^32)
-                 Node A (Virtual v1)
-                    /          \
-                   /            \
-  Node C (Virtual v2)          Node B (Virtual v1)
-                  \              /
-                   \            /
-                 Node A (Virtual v2)
-```
+*(Source code diagram saved under [consistent_hashing_ring.mermaid](file:///d:/Coding/Projects----For%20Resume/Cairn/Docs/assets/consistent_hashing_ring.mermaid))*
 
 ### 3.1 Consistent Hashing Ring
 * **Representation:** Built using a Java `TreeMap<Long, Node>`, representing a ring from $0$ to $2^{32}-1$.
