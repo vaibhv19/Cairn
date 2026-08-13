@@ -1,10 +1,10 @@
 package com.portfolio.cairn.unit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.portfolio.cairn.engine.CacheEngine;
-import com.portfolio.cairn.engine.CacheEntry;
 import com.portfolio.cairn.exception.EvictionFailedException;
 import com.portfolio.cairn.exception.InvalidTtlException;
+import com.portfolio.cairn.exception.KeyNotFoundException;
+import com.portfolio.cairn.sharding.NodeRouter;
 import com.portfolio.cairn.web.CacheController;
 import com.portfolio.cairn.web.CacheDtos;
 import org.junit.jupiter.api.Test;
@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.is;
@@ -28,7 +29,7 @@ public class CacheControllerTest {
     private MockMvc mockMvc;
 
     @MockBean
-    private CacheEngine cacheEngine;
+    private NodeRouter nodeRouter;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -36,6 +37,8 @@ public class CacheControllerTest {
     @Test
     public void testSetSuccess() throws Exception {
         CacheDtos.SetRequest request = new CacheDtos.SetRequest("k1", "v1", 300L);
+        CacheDtos.SetResponse responseBody = new CacheDtos.SetResponse("k1", "cached", 300L);
+        Mockito.when(nodeRouter.set(any())).thenAnswer(inv -> ResponseEntity.ok(responseBody));
 
         mockMvc.perform(post("/api/v1/cache")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -50,8 +53,7 @@ public class CacheControllerTest {
     public void testSetInvalidTtl() throws Exception {
         CacheDtos.SetRequest request = new CacheDtos.SetRequest("k1", "v1", -10L);
 
-        Mockito.doThrow(new InvalidTtlException("TTL must be a positive integer."))
-                .when(cacheEngine).set(eq("k1"), eq("v1"), eq(-10L));
+        Mockito.when(nodeRouter.set(any())).thenThrow(new InvalidTtlException("TTL must be a positive integer."));
 
         mockMvc.perform(post("/api/v1/cache")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -67,8 +69,7 @@ public class CacheControllerTest {
     public void testSetEvictionFailed() throws Exception {
         CacheDtos.SetRequest request = new CacheDtos.SetRequest("k1", "v1", null);
 
-        Mockito.doThrow(new EvictionFailedException("Cache capacity reached and eviction was unable to free memory."))
-                .when(cacheEngine).set(eq("k1"), eq("v1"), isNull());
+        Mockito.when(nodeRouter.set(any())).thenThrow(new EvictionFailedException("Cache capacity reached and eviction was unable to free memory."));
 
         mockMvc.perform(post("/api/v1/cache")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -81,21 +82,19 @@ public class CacheControllerTest {
 
     @Test
     public void testGetHit() throws Exception {
-        long expiryTime = System.currentTimeMillis() + 300_000L;
-        CacheEntry entry = new CacheEntry("v1", System.currentTimeMillis(), expiryTime, System.currentTimeMillis(), 1);
-
-        Mockito.when(cacheEngine.get("k1")).thenReturn(entry);
+        CacheDtos.GetResponse responseBody = new CacheDtos.GetResponse("k1", "v1", 299L);
+        Mockito.when(nodeRouter.get("k1")).thenAnswer(inv -> ResponseEntity.ok(responseBody));
 
         mockMvc.perform(get("/api/v1/cache/k1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.key", is("k1")))
                 .andExpect(jsonPath("$.value", is("v1")))
-                .andExpect(jsonPath("$.ttl_remaining").value(org.hamcrest.Matchers.greaterThan(0)));
+                .andExpect(jsonPath("$.ttl_remaining", is(299)));
     }
 
     @Test
     public void testGetMiss() throws Exception {
-        Mockito.when(cacheEngine.get("k1")).thenReturn(null);
+        Mockito.when(nodeRouter.get("k1")).thenThrow(new KeyNotFoundException("Requested key does not exist or has expired."));
 
         mockMvc.perform(get("/api/v1/cache/k1"))
                 .andExpect(status().isNotFound())
@@ -106,8 +105,7 @@ public class CacheControllerTest {
 
     @Test
     public void testDeleteSuccess() throws Exception {
-        CacheEntry entry = new CacheEntry("v1", System.currentTimeMillis());
-        Mockito.when(cacheEngine.delete("k1")).thenReturn(entry);
+        Mockito.when(nodeRouter.delete("k1")).thenReturn(ResponseEntity.noContent().build());
 
         mockMvc.perform(delete("/api/v1/cache/k1"))
                 .andExpect(status().isNoContent())
@@ -116,7 +114,7 @@ public class CacheControllerTest {
 
     @Test
     public void testDeleteMiss() throws Exception {
-        Mockito.when(cacheEngine.delete("k1")).thenReturn(null);
+        Mockito.when(nodeRouter.delete("k1")).thenThrow(new KeyNotFoundException("Cannot delete key: key does not exist."));
 
         mockMvc.perform(delete("/api/v1/cache/k1"))
                 .andExpect(status().isNotFound())
@@ -127,7 +125,8 @@ public class CacheControllerTest {
 
     @Test
     public void testExistsTrue() throws Exception {
-        Mockito.when(cacheEngine.exists("k1")).thenReturn(true);
+        CacheDtos.ExistsResponse responseBody = new CacheDtos.ExistsResponse("k1", true);
+        Mockito.when(nodeRouter.exists("k1")).thenAnswer(inv -> ResponseEntity.ok(responseBody));
 
         mockMvc.perform(get("/api/v1/cache/k1/exists"))
                 .andExpect(status().isOk())
@@ -137,7 +136,8 @@ public class CacheControllerTest {
 
     @Test
     public void testExistsFalse() throws Exception {
-        Mockito.when(cacheEngine.exists("k1")).thenReturn(false);
+        CacheDtos.ExistsResponse responseBody = new CacheDtos.ExistsResponse("k1", false);
+        Mockito.when(nodeRouter.exists("k1")).thenAnswer(inv -> ResponseEntity.ok(responseBody));
 
         mockMvc.perform(get("/api/v1/cache/k1/exists"))
                 .andExpect(status().isOk())
@@ -147,10 +147,9 @@ public class CacheControllerTest {
 
     @Test
     public void testExpireSuccess() throws Exception {
-        CacheEntry entry = new CacheEntry("v1", System.currentTimeMillis());
-        Mockito.when(cacheEngine.get("k1")).thenReturn(entry);
-
         CacheDtos.ExpireRequest request = new CacheDtos.ExpireRequest(600L);
+        CacheDtos.ExpireResponse responseBody = new CacheDtos.ExpireResponse("k1", 600L);
+        Mockito.when(nodeRouter.expire(eq("k1"), any())).thenAnswer(inv -> ResponseEntity.ok(responseBody));
 
         mockMvc.perform(post("/api/v1/cache/k1/expire")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -162,13 +161,12 @@ public class CacheControllerTest {
 
     @Test
     public void testTtlSuccess() throws Exception {
-        long expiryTime = System.currentTimeMillis() + 600_000L;
-        CacheEntry entry = new CacheEntry("v1", System.currentTimeMillis(), expiryTime, System.currentTimeMillis(), 1);
-        Mockito.when(cacheEngine.get("k1")).thenReturn(entry);
+        CacheDtos.TtlResponse responseBody = new CacheDtos.TtlResponse("k1", 600L);
+        Mockito.when(nodeRouter.ttl("k1")).thenAnswer(inv -> ResponseEntity.ok(responseBody));
 
         mockMvc.perform(get("/api/v1/cache/k1/ttl"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.key", is("k1")))
-                .andExpect(jsonPath("$.ttl_remaining").value(org.hamcrest.Matchers.greaterThan(0)));
+                .andExpect(jsonPath("$.ttl_remaining", is(600)));
     }
 }
