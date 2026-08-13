@@ -48,4 +48,12 @@ public class CacheController {
     public ResponseEntity<?> ttl(@PathVariable String key) {
         return nodeRouter.ttl(key);
     }
+
+    @PostMapping("/invalidate")
+    public ResponseEntity<?> invalidate(
+            @RequestBody CacheDtos.InvalidateRequest request,
+            @RequestParam(value = "localOnly", required = false, defaultValue = "false") boolean localOnly
+    ) {
+        return nodeRouter.invalidate(request, localOnly);
+    }
 }

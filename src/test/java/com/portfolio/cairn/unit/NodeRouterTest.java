@@ -89,8 +89,9 @@ public class NodeRouterTest {
             }
         };
 
-        // Create router with WebClient builder
-        router = new NodeRouter(ring, localCache, nodeConfig, WebClient.builder());
+        // Create router with WebClient builder and InvalidationService
+        com.portfolio.cairn.engine.InvalidationService invalidationService = new com.portfolio.cairn.engine.InvalidationService(localCache);
+        router = new NodeRouter(ring, localCache, nodeConfig, WebClient.builder(), invalidationService);
     }
 
     @AfterEach

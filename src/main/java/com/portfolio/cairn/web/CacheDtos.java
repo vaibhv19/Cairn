@@ -42,6 +42,15 @@ public class CacheDtos {
             long ttl_remaining
     ) {}
 
+    public record InvalidateRequest(
+            String pattern
+    ) {}
+
+    public record InvalidateResponse(
+            String status,
+            int invalidatedKeysCount
+    ) {}
+
     public record ErrorResponse(
             String status,
             String errorCode,

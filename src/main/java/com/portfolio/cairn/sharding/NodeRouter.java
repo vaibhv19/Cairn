@@ -3,6 +3,7 @@ package com.portfolio.cairn.sharding;
 import com.portfolio.cairn.engine.CacheEngine;
 import com.portfolio.cairn.engine.CacheEntry;
 import com.portfolio.cairn.exception.KeyNotFoundException;
+import com.portfolio.cairn.engine.InvalidationService;
 import com.portfolio.cairn.web.CacheDtos;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -26,17 +27,20 @@ public class NodeRouter {
     private final CacheEngine cacheEngine;
     private final NodeConfig nodeConfig;
     private final WebClient webClient;
+    private final InvalidationService invalidationService;
 
     @Autowired
     public NodeRouter(
             ConsistentHashRing consistentHashRing,
             CacheEngine cacheEngine,
             NodeConfig nodeConfig,
-            WebClient.Builder webClientBuilder
+            WebClient.Builder webClientBuilder,
+            InvalidationService invalidationService
     ) {
         this.consistentHashRing = consistentHashRing;
         this.cacheEngine = cacheEngine;
         this.nodeConfig = nodeConfig;
+        this.invalidationService = invalidationService;
 
         // Configure resilient connection pool for Netty HttpClient
         ConnectionProvider provider = ConnectionProvider.builder("cairn-router-pool")
@@ -177,6 +181,51 @@ public class NodeRouter {
         } else {
             String address = getAddressForNode(nodeId);
             return forwardRequest(webClient.get().uri(address + "/api/v1/cache/" + key + "/ttl"));
+        }
+    }
+
+    public ResponseEntity<?> invalidate(CacheDtos.InvalidateRequest request, boolean localOnly) {
+        if (localOnly) {
+            int count = invalidationService.invalidateByPattern(request.pattern());
+            return ResponseEntity.ok(new CacheDtos.InvalidateResponse("success", count));
+        }
+
+        if (request.pattern().contains("*")) {
+            int totalCount = 0;
+            for (NodeConfig.ClusterNode node : nodeConfig.getNodes()) {
+                if (node.getNodeId().equals(nodeConfig.getLocalNodeId())) {
+                    totalCount += invalidationService.invalidateByPattern(request.pattern());
+                } else {
+                    try {
+                        CacheDtos.InvalidateResponse response = webClient.post()
+                                .uri(node.getAddress() + "/api/v1/cache/invalidate?localOnly=true")
+                                .bodyValue(request)
+                                .retrieve()
+                                .bodyToMono(CacheDtos.InvalidateResponse.class)
+                                .block();
+                        if (response != null) {
+                            totalCount += response.invalidatedKeysCount();
+                        }
+                    } catch (Exception e) {
+                        // ignore or handle remote node connection issues
+                    }
+                }
+            }
+            return ResponseEntity.ok(new CacheDtos.InvalidateResponse("success", totalCount));
+        } else {
+            String nodeId = consistentHashRing.getNode(request.pattern());
+            if (nodeId == null) {
+                throw new IllegalStateException("Consistent Hash Ring is empty!");
+            }
+            if (nodeId.equals(nodeConfig.getLocalNodeId())) {
+                int count = invalidationService.invalidateByPattern(request.pattern());
+                return ResponseEntity.ok(new CacheDtos.InvalidateResponse("success", count));
+            } else {
+                String address = getAddressForNode(nodeId);
+                return forwardRequest(webClient.post()
+                        .uri(address + "/api/v1/cache/invalidate?localOnly=true")
+                        .bodyValue(request));
+            }
         }
     }
 }
