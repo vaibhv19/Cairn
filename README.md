@@ -6,6 +6,12 @@ Unlike its twin project [Shard](https://github.com/vaibhv19/Shard) (built with P
 
 ---
 
+## Related Writing
+
+* [Same System, Different Languages](https://vaibhav19.vercel.app/writing/what-i-learned-from-building-the-same-distributed-cache-in-java-and-python)
+
+---
+
 ## Component Architecture
 
 Below is the component layout of a single Cairn node and its interaction within a sharded cluster:
