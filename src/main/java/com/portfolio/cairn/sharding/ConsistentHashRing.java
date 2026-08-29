@@ -5,7 +5,6 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,22 +45,6 @@ public class ConsistentHashRing {
     }
 
     /**
-     * Removes a physical node and its virtual nodes from the ring.
-     */
-    public void removeNode(String nodeId, int virtualNodeCount) {
-        rwLock.writeLock().lock();
-        try {
-            nodes.remove(nodeId);
-            for (int i = 0; i < virtualNodeCount; i++) {
-                long hashVal = hash(nodeId + "#" + i);
-                ring.remove(hashVal);
-            }
-        } finally {
-            rwLock.writeLock().unlock();
-        }
-    }
-
-    /**
      * Resolves the target physical node ID for a given cache key.
      */
     public String getNode(String key) {
@@ -89,25 +72,6 @@ public class ConsistentHashRing {
             nodes.clear();
         } finally {
             rwLock.writeLock().unlock();
-        }
-    }
-
-    /**
-     * Returns the set of physical node IDs currently registered in the ring.
-     */
-    public Set<String> getNodes() {
-        return nodes.keySet();
-    }
-
-    /**
-     * Returns a copy of the underlying TreeMap representation of the ring.
-     */
-    public TreeMap<Long, String> getRingCopy() {
-        rwLock.readLock().lock();
-        try {
-            return new TreeMap<>(ring);
-        } finally {
-            rwLock.readLock().unlock();
         }
     }
 }

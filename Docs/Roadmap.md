@@ -2,10 +2,10 @@
 
 ## Document Control
 * **Document Version:** 0.1.0
-* **Status:** Draft
+* **Status:** Complete
 * **Authors:** Portfolio Owner / Technical Architect
-* **Milestone Reference:** v0.5.0 (Roadmap Complete)
-* **Twin Project Reference:** [Shard Roadmap]()
+* **Milestone Reference:** v1.0.0 (Phase 3 Complete)
+* **Twin Project Reference:** [Shard](https://github.com/vaibhv19/Shard)
 
 ---
 

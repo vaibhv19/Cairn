@@ -24,17 +24,8 @@ public class MockDatabase {
         return dbStore.get(key);
     }
 
-    public void delete(String key) {
-        dbStore.remove(key);
-    }
-
     public void setShouldFail(boolean shouldFail) {
         this.shouldFail = shouldFail;
-    }
-
-    public void clear() {
-        dbStore.clear();
-        shouldFail = false;
     }
 
     public int size() {

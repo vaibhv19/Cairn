@@ -71,11 +71,4 @@ public class CacheMetricsCollector {
     public Timer getTimer() {
         return timer;
     }
-
-    public void reset() {
-        hits.reset();
-        misses.reset();
-        policyEvictions.reset();
-        ttlEvictions.reset();
-    }
 }

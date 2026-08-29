@@ -2,10 +2,10 @@
 
 ## Document Control
 * **Document Version:** 0.1.0
-* **Status:** Draft
+* **Status:** Complete
 * **Authors:** Portfolio Owner / Technical Architect
-* **Milestone Reference:** v0.1.0 (Docs Complete)
-* **Twin Project Reference:** [Shard Folder Structure]()
+* **Milestone Reference:** v1.0.0 (Phase 3 Complete)
+* **Twin Project Reference:** [Shard](https://github.com/vaibhv19/Shard)
 
 ---
 
@@ -17,17 +17,22 @@ Cairn follows the standard Maven directory structure, separating application log
 cairn/
 ├── .git/
 ├── Docs/                              # Complete Documentation Suite
-│   ├── Cairn — Feature List.md
-│   ├── PRD.md
-│   ├── TechStack.md
-│   ├── SystemArchitecture.md
-│   ├── AppFlow.md
-│   ├── UIDesign.md
-│   ├── FolderStructure.md
-│   ├── DBSchema.md
+│   ├── assets/                        # Architecture & flow diagrams
+│   │   ├── concurrency_thread_interaction.mermaid
+│   │   ├── consistent_hashing_ring.mermaid
+│   │   └── dashboard_layout.mermaid
+│   ├── grafana-dashboard.json         # Prometheus / Grafana dashboard template
 │   ├── APIContracts.md
-│   └── DASHBOARD_DESIGN.md
+│   ├── AppFlow.md
+│   ├── FolderStructure.md
+│   ├── LEARNING_HANDBOOK.md
+│   ├── PRD.md
+│   ├── Roadmap.md
+│   ├── SystemArchitecture.md
+│   ├── TechStack.md
+│   └── UIDesign.md
 ├── pom.xml                            # Maven configuration file
+├── run-cluster.bat                    # Multi-node local cluster startup script
 └── src/
     ├── main/
     │   ├── java/
@@ -36,32 +41,37 @@ cairn/
     │   │           └── cairn/
     │   │               ├── CairnApplication.java      # Application entrypoint
     │   │               ├── config/                    # Spring Beans & configs
-    │   │               │   ├── CacheConfig.java
-    │   │               │   └── SchedulerConfig.java
-    │   │               ├── web/                       # Web layer (REST API Layer)
-    │   │               │   ├── CacheController.java
-    │   │               │   ├── CacheDtos.java
-    │   │               │   ├── GlobalExceptionHandler.java
-    │   │               │   └── RoutingController.java # [Phase 2] Routing endpoint
+    │   │               │   └── CacheConfig.java
     │   │               ├── engine/                    # Core Cache Engine
     │   │               │   ├── CacheEngine.java       # Coordinates storage & policies
     │   │               │   ├── CacheEntry.java        # Core in-memory data record
+    │   │               │   ├── InvalidationService.java # Pattern-based invalidations
     │   │               │   ├── MockDatabase.java      # Mock persistence store
     │   │               │   └── evict/                 # Eviction Policy Strategy
     │   │               │       ├── EvictionPolicy.java# Strategy interface
     │   │               │       ├── LruEvictionPolicy.java
     │   │               │       └── LfuEvictionPolicy.java
+    │   │               ├── exception/                 # Custom domain exceptions
+    │   │               │   ├── EvictionFailedException.java
+    │   │               │   ├── InvalidTtlException.java
+    │   │               │   └── KeyNotFoundException.java
     │   │               ├── expire/                    # Key Expiration Subsystem
     │   │               │   └── ActiveExpirySweeper.java # Background sweep daemon
-    │   │               ├── sharding/                  # [Phase 2] Consistent Hashing
+    │   │               ├── metrics/                   # Actuator & Counters
+    │   │               │   ├── CacheMetricsCollector.java
+    │   │               │   └── CairnMeterBinder.java
+    │   │               ├── sharding/                  # Consistent Hashing & Routing
     │   │               │   ├── ConsistentHashRing.java
-    │   │               │   ├── NodeRouter.java        # Client-side / proxy routing
-    │   │               │   └── NodeConfig.java
-    │   │               └── metrics/                   # [Phase 3] Actuator & Counters
-    │   │                   └── CacheMetricsCollector.java
+    │   │               │   ├── NodeConfig.java
+    │   │               │   └── NodeRouter.java        # Proxy routing layer
+    │   │               └── web/                       # REST API Layer
+    │   │                   ├── CacheController.java
+    │   │                   ├── CacheDtos.java
+    │   │                   ├── ClusterDtos.java
+    │   │                   ├── GlobalExceptionHandler.java
+    │   │                   └── RoutingController.java # Cluster health endpoints
     │   └── resources/
-    │       ├── application.yml        # Service properties (ports, static nodes)
-    │       └── logback-spring.xml     # Logging configuration
+    │       └── application.yml        # Service properties (ports, static nodes)
     └── test/
         └── java/
             └── com/
@@ -96,11 +106,14 @@ cairn/
 ### 2.1 Cache Engine & Strategy (`/engine`)
 * **`CacheEngine.java`**: The central coordinator containing storage operations. Directly references the pluggable eviction strategy bean and orchestrates key modifications.
 * **`CacheEntry.java`**: Represents the in-memory object stored inside the primary map. Holds the user value payload and metadata (creation time, TTL, last-access timestamp, access frequency).
+* **`InvalidationService.java`**: Handles exact and wildcard key pattern invalidations across cache partitions.
+* **`MockDatabase.java`**: In-memory database simulation for validating write-through and write-back pipelines.
 * **`evict/`**: Implements the Strategy Pattern. Contains the interface and swappable Spring component implementations (`LruEvictionPolicy`, `LfuEvictionPolicy`) to keep eviction logic modular.
 
 ### 2.2 API Layer (`/web`)
 * **`CacheController.java`**: Houses REST routes, mapping HTTP requests (`GET`, `POST`, `DELETE`) to the `CacheEngine` operations via NodeRouter.
 * **`CacheDtos.java`**: Standard DTO requests and responses with Jakarta Validation constraints.
+* **`ClusterDtos.java`**: DTOs for cluster health and ring status endpoints.
 * **`GlobalExceptionHandler.java`**: Global exception mapper mapping custom exceptions to standard HTTP error structures.
 * **`RoutingController.java`**: Handles routing coordination and node status checks in the static cluster environment.
 
@@ -108,10 +121,10 @@ cairn/
 * Contains tasks and thread pool handlers running background tasks. Resolves active key expirations asynchronously using `ScheduledExecutorService` parameters.
 
 ### 2.4 Sharding & Consistent Hashing (`/sharding`)
-* Contains files representing virtual node configuration mapping, key hashing routines, node target calculation on the hashing ring, and node failover simulations.
+* Contains files representing virtual node configuration mapping, key hashing routines (`ConsistentHashRing`), static cluster parsing (`NodeConfig`), and node proxy routing (`NodeRouter`).
 
-### 2.5 Metrics & Invalidation (`/metrics`)
-* Contains metrics counters and invalidation logic to clear cache contents manually or dynamically.
+### 2.5 Metrics & Telemetry (`/metrics`)
+* Contains non-blocking metrics counters (`CacheMetricsCollector`) and Micrometer binder (`CairnMeterBinder`) to expose cache metrics to Prometheus and Actuator.
 
 ---
 
@@ -126,13 +139,14 @@ Because Cairn’s core goal is to verify thread safety and lock performance unde
 
 ## 4. `/docs` Folder Inventory
 
-The `/Docs` folder contains the complete, MAANG-level documentation set required for the Cairn project milestone:
+The `/Docs` folder contains the documentation set for the Cairn project:
 * **`PRD.md`**: Core product goals, requirements, success metrics, and twin comparison scope.
 * **`TechStack.md`**: Architectural justifications for Java 21, Spring Boot, `ConcurrentHashMap`, and locking choices.
 * **`SystemArchitecture.md`**: Internal component layouts, thread models, locking barriers, and sharding topology.
 * **`AppFlow.md`**: Request lifecycles, contention sequences, background sweep execution, and data flow steps.
 * **`UIDesign.md`**: REST API JSON structures and Phase 3 operator metrics dashboard wireframe.
 * **`FolderStructure.md`**: Application package layouts, test isolation mapping, and document directories (this document).
-* **`DBSchema.md`**: In-memory record layout and structural non-goals.
 * **`APIContracts.md`**: Complete URL routing, JSON payloads, and HTTP error mappings across all phases.
-* **`DASHBOARD_DESIGN.md`**: Core visual design guidelines, typography, color palette, and layout principles for the Phase 3 dashboard.
+* **`Roadmap.md`**: Implementation roadmap, task dependency graphs, and git workflow progression.
+* **`LEARNING_HANDBOOK.md`**: Concurrency insights, architectural retrospectives, and Shard vs. Cairn comparative analysis.
+* **`grafana-dashboard.json`**: Ready-to-import Grafana dashboard panel layout for Prometheus metrics.
