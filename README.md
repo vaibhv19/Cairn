@@ -8,7 +8,7 @@ Unlike its twin project [Shard](https://github.com/vaibhv19/Shard) (built with P
 
 ## Related Writing
 
-* [Same System, Different Languages](https://vaibhav19.vercel.app/writing/what-i-learned-from-building-the-same-distributed-cache-in-java-and-python)
+* [Same System, Different Languages](https://vaibhv19.dev/writing/what-i-learned-from-building-the-same-distributed-cache-in-java-and-python)
 
 ---
 
